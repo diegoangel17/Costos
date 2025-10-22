@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, useRef } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { AppProvider, useApp } from './context/AppContext';
 
@@ -14,19 +14,27 @@ import MayoresForm from './components/Mayores/MayoresForm';
 
 function FinancialSystemContent() {
   const { isAuthenticated, currentUser } = useAuth();
-  const { currentView, selectedProgram, loadCuentasCatalogo, loadUserReports, setSelectedProgram } = useApp();
-
-  // Usar useCallback para evitar recrear las funciones en cada render
-  const loadData = useCallback(() => {
-    if (isAuthenticated && currentUser) {
-      loadCuentasCatalogo();
-      loadUserReports(currentUser.userId);
-    }
-  }, [isAuthenticated, currentUser?.userId]); // Solo depender de valores primitivos
+  const { currentView, selectedProgram, initializeData, setSelectedProgram } = useApp();
+  
+  // ⭐ OPTIMIZACIÓN: Usar ref para controlar que solo se cargue una vez
+  const hasInitialized = useRef(false);
 
   useEffect(() => {
-    loadData();
-  }, [isAuthenticated, currentUser?.userId]); // Solo depender de valores primitivos
+    // Solo cargar datos si:
+    // 1. El usuario está autenticado
+    // 2. Tenemos un currentUser
+    // 3. No hemos inicializado todavía
+    if (isAuthenticated && currentUser && !hasInitialized.current) {
+      console.log('🚀 Primera carga de datos para usuario:', currentUser.userId);
+      hasInitialized.current = true;
+      initializeData(currentUser.userId);
+    }
+    
+    // Si el usuario cierra sesión, resetear el flag
+    if (!isAuthenticated) {
+      hasInitialized.current = false;
+    }
+  }, [isAuthenticated, currentUser?.userId, initializeData]);
 
   if (!isAuthenticated) {
     return <LoginForm />;
