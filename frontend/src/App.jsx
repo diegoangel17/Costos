@@ -1,4 +1,4 @@
-import FinancialSystem from './components/FinancialSystem'
+import FinancialSystem from './FinancialSystem'
 import './index.css'
 
 function App() {
