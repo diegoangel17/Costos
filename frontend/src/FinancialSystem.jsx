@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { AppProvider, useApp } from './context/AppContext';
 
@@ -16,12 +16,17 @@ function FinancialSystemContent() {
   const { isAuthenticated, currentUser } = useAuth();
   const { currentView, selectedProgram, loadCuentasCatalogo, loadUserReports, setSelectedProgram } = useApp();
 
-  useEffect(() => {
+  // Usar useCallback para evitar recrear las funciones en cada render
+  const loadData = useCallback(() => {
     if (isAuthenticated && currentUser) {
       loadCuentasCatalogo();
       loadUserReports(currentUser.userId);
     }
-  }, [isAuthenticated, currentUser, loadCuentasCatalogo, loadUserReports]);
+  }, [isAuthenticated, currentUser?.userId]); // Solo depender de valores primitivos
+
+  useEffect(() => {
+    loadData();
+  }, [isAuthenticated, currentUser?.userId]); // Solo depender de valores primitivos
 
   if (!isAuthenticated) {
     return <LoginForm />;

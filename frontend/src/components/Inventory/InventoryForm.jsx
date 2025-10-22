@@ -60,7 +60,7 @@ export default function InventoryForm() {
 
       if (response.ok && result.success) {
         alert('Reporte guardado exitosamente');
-        loadUserReports(currentUser.userId);
+        await loadUserReports(currentUser.userId);
       } else {
         alert(result.error || 'Error al guardar el reporte');
       }

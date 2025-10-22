@@ -51,11 +51,20 @@ export default function BalanceForm() {
       const result = await response.json();
 
       if (response.ok && result.success) {
-        alert('Reporte guardado exitosamente');
-        loadUserReports(currentUser.userId);
-      } else {
-        alert(result.error || 'Error al guardar el reporte');
-      }
+      console.log('✅ Reporte guardado. Recargando lista...');
+      
+      // ⭐ AGREGAR ESTOS LOGS
+      console.log('🔍 Antes de loadUserReports, reports.length:', reports.length);
+      
+      await loadUserReports(currentUser.userId);
+      
+      console.log('🔍 Después de loadUserReports, reports.length:', reports.length);
+      console.log('🔍 Lista actualizada de reportes:', reports);
+      
+      alert('Reporte guardado exitosamente');
+    } else {
+      alert(result.error || 'Error al guardar el reporte');
+    }
     } catch (error) {
       console.error('Error al guardar reporte:', error);
       alert('No se pudo conectar con el servidor para guardar el reporte');

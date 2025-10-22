@@ -26,6 +26,11 @@ export default function MayoresForm() {
   const reportesBalance = getReportesByTipo(1);
   const reportesInventario = getReportesByTipo(2);
   const reportesRegistros = getReportesByTipo(3);
+  
+    console.log('🔍 MayoresForm render:');
+    console.log('  - Reportes Balance:', reportesBalance.length);
+    console.log('  - Reportes Inventario:', reportesInventario.length);
+    console.log('  - Reportes Registros:', reportesRegistros.length);
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-6">

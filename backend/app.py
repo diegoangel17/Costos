@@ -195,6 +195,10 @@ def create_report():
         if not user:
             return jsonify({'error': 'Usuario no encontrado'}), 404
         
+        # ⭐ Log para debugging
+        print(f"Guardando reporte tipo {data.get('programId')}")
+        print(f"Estructura de data: {type(data['data'])}")
+        
         new_report = Report(
             user_id=user.id,
             name=data['name'],
@@ -216,6 +220,7 @@ def create_report():
         
     except Exception as e:
         db.session.rollback()
+        print(f"❌ Error al guardar reporte: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/health', methods=['GET'])

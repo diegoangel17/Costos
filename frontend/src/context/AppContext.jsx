@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
 import { CUENTAS_INICIALES } from '../constants';
 
 const AppContext = createContext();
@@ -16,6 +16,8 @@ export const AppProvider = ({ children }) => {
   const [selectedProgram, setSelectedProgram] = useState(null);
   const [cuentasCatalogo, setCuentasCatalogo] = useState(CUENTAS_INICIALES);
   const [reports, setReports] = useState([]);
+  const [hasLoadedCuentas, setHasLoadedCuentas] = useState(false);
+  const [hasLoadedReports, setHasLoadedReports] = useState(false);
   
   const [reportData, setReportData] = useState({
     name: '',
@@ -25,9 +27,13 @@ export const AppProvider = ({ children }) => {
 
   const API_URL = 'http://localhost:5000/api';
 
-  // Cargar catálogo de cuentas
-  const loadCuentasCatalogo = async () => {
+  // Cargar catálogo de cuentas - memoizado con useCallback
+  const loadCuentasCatalogo = useCallback(async () => {
+    // Evitar cargar múltiples veces
+    if (hasLoadedCuentas) return;
+    
     try {
+      setHasLoadedCuentas(true);
       const response = await fetch(`${API_URL}/cuentas`);
       const data = await response.json();
       
@@ -39,12 +45,17 @@ export const AppProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('Error al cargar catálogo de cuentas:', error);
+      setHasLoadedCuentas(false);
     }
-  };
+  }, [hasLoadedCuentas]);
 
-  // Cargar reportes del usuario
-  const loadUserReports = async (userId) => {
+  // Cargar reportes del usuario - memoizado con useCallback
+  const loadUserReports = useCallback(async (userId) => {
+    // Evitar cargar múltiples veces para el mismo usuario
+    if (hasLoadedReports) return;
+    
     try {
+      setHasLoadedReports(true);
       const response = await fetch(`${API_URL}/reports?userId=${userId}`);
       const data = await response.json();
       
@@ -61,11 +72,12 @@ export const AppProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('Error al cargar reportes:', error);
+      setHasLoadedReports(false);
     }
-  };
+  }, [hasLoadedReports]);
 
-  // Guardar nueva cuenta en el backend
-  const saveNewCuentaToBackend = async (cuenta, clasificacion) => {
+  // Guardar nueva cuenta en el backend - memoizado con useCallback
+  const saveNewCuentaToBackend = useCallback(async (cuenta, clasificacion) => {
     try {
       await fetch(`${API_URL}/cuentas`, {
         method: 'POST',
@@ -81,9 +93,16 @@ export const AppProvider = ({ children }) => {
     } catch (error) {
       console.error('Error al guardar cuenta en el backend:', error);
     }
-  };
+  }, []);
 
-  const value = {
+  // Resetear estados de carga cuando cambie el usuario
+  const resetLoadStates = useCallback(() => {
+    setHasLoadedCuentas(false);
+    setHasLoadedReports(false);
+  }, []);
+
+  // Memoizar el valor del contexto para evitar re-renders innecesarios
+  const value = useMemo(() => ({
     currentView,
     setCurrentView,
     selectedProgram,
@@ -97,8 +116,19 @@ export const AppProvider = ({ children }) => {
     API_URL,
     loadCuentasCatalogo,
     loadUserReports,
-    saveNewCuentaToBackend
-  };
+    saveNewCuentaToBackend,
+    resetLoadStates
+  }), [
+    currentView,
+    selectedProgram,
+    cuentasCatalogo,
+    reports,
+    reportData,
+    loadCuentasCatalogo,
+    loadUserReports,
+    saveNewCuentaToBackend,
+    resetLoadStates
+  ]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };

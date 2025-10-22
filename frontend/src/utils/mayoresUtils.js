@@ -167,19 +167,42 @@ export const calcularEsquemaOrden = (ordenDetalle, saldoInicial, movimientos) =>
  * @param {Array} registrosRows - Filas de registros
  * @returns {Array} Lista única de cuentas
  */
+
 export const getCuentasDisponibles = (balanceRows, registrosRows) => {
-  const cuentasBalance = balanceRows.map(r => ({
-    cuenta: r.cuenta,
-    clasificacion: r.clasificacion,
-    origen: 'balance'
-  }));
+  console.log('🔍 [getCuentasDisponibles] Inicio');
+  console.log('🔍 [getCuentasDisponibles] balanceRows:', balanceRows);
+  console.log('🔍 [getCuentasDisponibles] registrosRows:', registrosRows);
+
+  // Verificar que sean arrays
+  if (!Array.isArray(balanceRows)) {
+    console.error('❌ balanceRows NO es un array:', typeof balanceRows);
+    return [];
+  }
+  if (!Array.isArray(registrosRows)) {
+    console.error('❌ registrosRows NO es un array:', typeof registrosRows);
+    return [];
+  }
+
+  const cuentasBalance = balanceRows.map(r => {
+    console.log('🔍 [Balance] Procesando fila:', r);
+    return {
+      cuenta: r.cuenta,
+      clasificacion: r.clasificacion,
+      origen: 'balance'
+    };
+  });
+  
+  console.log('🔍 [getCuentasDisponibles] Cuentas del balance:', cuentasBalance);
   
   const cuentasRegistros = registrosRows
     .map(r => r.cuenta)
-    .filter(cuenta => cuenta && cuenta.trim())
-    .filter((cuenta, index, self) => self.indexOf(cuenta) === index) // Únicos
+    .filter(cuenta => {
+      const valido = cuenta && cuenta.trim();
+      console.log('🔍 [Registros] Cuenta:', cuenta, 'Válido:', valido);
+      return valido;
+    })
+    .filter((cuenta, index, self) => self.indexOf(cuenta) === index)
     .map(cuenta => {
-      // Buscar si existe en balance
       const enBalance = balanceRows.find(b => 
         b.cuenta.toLowerCase() === cuenta.toLowerCase()
       );
@@ -190,7 +213,8 @@ export const getCuentasDisponibles = (balanceRows, registrosRows) => {
       };
     });
   
-  // Combinar y eliminar duplicados
+  console.log('🔍 [getCuentasDisponibles] Cuentas de registros:', cuentasRegistros);
+  
   const todasCuentas = [...cuentasBalance];
   
   cuentasRegistros.forEach(cr => {
@@ -202,8 +226,18 @@ export const getCuentasDisponibles = (balanceRows, registrosRows) => {
     }
   });
   
-  return todasCuentas.sort((a, b) => a.cuenta.localeCompare(b.cuenta));
+  console.log('🔍 [getCuentasDisponibles] Total cuentas (antes de ordenar):', todasCuentas);
+  
+  const resultado = todasCuentas.sort((a, b) => a.cuenta.localeCompare(b.cuenta));
+  
+  console.log('🔍 [getCuentasDisponibles] Resultado final:', resultado);
+  console.log('🔍 [getCuentasDisponibles] Total:', resultado.length);
+  
+  return resultado;
 };
+
+
+
 /**
  * Obtener lista de órdenes disponibles (de Inventario)
  * @param {Array} processRows - Filas de productos en proceso
