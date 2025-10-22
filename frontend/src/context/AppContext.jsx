@@ -16,8 +16,6 @@ export const AppProvider = ({ children }) => {
   const [selectedProgram, setSelectedProgram] = useState(null);
   const [cuentasCatalogo, setCuentasCatalogo] = useState(CUENTAS_INICIALES);
   const [reports, setReports] = useState([]);
-  const [hasLoadedCuentas, setHasLoadedCuentas] = useState(false);
-  const [hasLoadedReports, setHasLoadedReports] = useState(false);
   
   const [reportData, setReportData] = useState({
     name: '',
@@ -27,13 +25,11 @@ export const AppProvider = ({ children }) => {
 
   const API_URL = 'http://localhost:5000/api';
 
-  // Cargar catálogo de cuentas - memoizado con useCallback
+  // ⭐ CORRECCIÓN 1: Remover los flags que bloqueaban la recarga
+  // Ahora loadCuentasCatalogo se puede llamar múltiples veces sin problema
   const loadCuentasCatalogo = useCallback(async () => {
-    // Evitar cargar múltiples veces
-    if (hasLoadedCuentas) return;
-    
     try {
-      setHasLoadedCuentas(true);
+      console.log('🔄 Cargando catálogo de cuentas...');
       const response = await fetch(`${API_URL}/cuentas`);
       const data = await response.json();
       
@@ -42,44 +38,63 @@ export const AppProvider = ({ children }) => {
           cuenta: c.cuenta,
           clasificacion: c.clasificacion
         })));
+        console.log('✅ Catálogo de cuentas cargado:', data.cuentas.length);
       }
     } catch (error) {
-      console.error('Error al cargar catálogo de cuentas:', error);
-      setHasLoadedCuentas(false);
+      console.error('❌ Error al cargar catálogo de cuentas:', error);
     }
-  }, [hasLoadedCuentas]);
+  }, [API_URL]);
 
-  // Cargar reportes del usuario - memoizado con useCallback
-  const loadUserReports = useCallback(async (userId) => {
-    // Evitar cargar múltiples veces para el mismo usuario
-    if (hasLoadedReports) return;
-    
+  // ⭐ CORRECCIÓN 2: loadUserReports ahora SIEMPRE recarga desde el servidor
+  // Removido el flag hasLoadedReports que causaba el problema
+  const loadUserReports = useCallback(async (userId, forceReload = false) => {
     try {
-      setHasLoadedReports(true);
+      console.log('🔄 Cargando reportes del usuario:', userId);
+      console.log('🔄 Force reload:', forceReload);
+      
       const response = await fetch(`${API_URL}/reports?userId=${userId}`);
       const data = await response.json();
       
+      console.log('📥 Respuesta del servidor:', data);
+      
       if (data.success && data.reports) {
-        setReports(data.reports.map(r => ({
+        const mappedReports = data.reports.map(r => ({
           id: r.id,
           name: r.name,
           type: r.reportType,
           date: r.date,
-          icon: r.programId === 1 ? 'balance' : r.programId === 2 ? 'inventory' : 'chart',
-          color: r.programId === 1 ? 'bg-blue-500' : r.programId === 2 ? 'bg-green-500' : 'bg-purple-500',
+          icon: r.programId === 1 ? 'balance' : 
+                r.programId === 2 ? 'inventory' : 
+                r.programId === 3 ? 'chart' :
+                r.programId === 4 ? 'chart' : 'chart',
+          color: r.programId === 1 ? 'bg-blue-500' : 
+                 r.programId === 2 ? 'bg-green-500' : 
+                 r.programId === 3 ? 'bg-purple-500' :
+                 r.programId === 4 ? 'bg-orange-500' : 'bg-gray-500',
           programId: r.programId
-        })));
+        }));
+        
+        setReports(mappedReports);
+        console.log('✅ Reportes cargados:', mappedReports.length);
+        console.log('📊 Lista completa de reportes:', mappedReports);
+        
+        return mappedReports;
+      } else {
+        console.warn('⚠️ No se encontraron reportes en la respuesta');
+        setReports([]);
+        return [];
       }
     } catch (error) {
-      console.error('Error al cargar reportes:', error);
-      setHasLoadedReports(false);
+      console.error('❌ Error al cargar reportes:', error);
+      setReports([]);
+      return [];
     }
-  }, [hasLoadedReports]);
+  }, [API_URL]);
 
-  // Guardar nueva cuenta en el backend - memoizado con useCallback
+  // Guardar nueva cuenta en el backend
   const saveNewCuentaToBackend = useCallback(async (cuenta, clasificacion) => {
     try {
-      await fetch(`${API_URL}/cuentas`, {
+      const response = await fetch(`${API_URL}/cuentas`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -90,18 +105,26 @@ export const AppProvider = ({ children }) => {
           descripcion: 'Cuenta personalizada'
         })
       });
+      
+      if (response.ok) {
+        console.log('✅ Nueva cuenta guardada:', cuenta);
+        // Recargar catálogo después de guardar
+        await loadCuentasCatalogo();
+      }
     } catch (error) {
-      console.error('Error al guardar cuenta en el backend:', error);
+      console.error('❌ Error al guardar cuenta en el backend:', error);
     }
-  }, []);
+  }, [API_URL, loadCuentasCatalogo]);
 
-  // Resetear estados de carga cuando cambie el usuario
-  const resetLoadStates = useCallback(() => {
-    setHasLoadedCuentas(false);
-    setHasLoadedReports(false);
-  }, []);
+  // ⭐ CORRECCIÓN 3: Nueva función para forzar recarga completa
+  const refreshAllData = useCallback(async (userId) => {
+    console.log('🔄 Refrescando todos los datos...');
+    await loadCuentasCatalogo();
+    await loadUserReports(userId, true);
+    console.log('✅ Datos refrescados completamente');
+  }, [loadCuentasCatalogo, loadUserReports]);
 
-  // Memoizar el valor del contexto para evitar re-renders innecesarios
+  // Memoizar el valor del contexto
   const value = useMemo(() => ({
     currentView,
     setCurrentView,
@@ -117,7 +140,7 @@ export const AppProvider = ({ children }) => {
     loadCuentasCatalogo,
     loadUserReports,
     saveNewCuentaToBackend,
-    resetLoadStates
+    refreshAllData // ⭐ Nueva función exportada
   }), [
     currentView,
     selectedProgram,
@@ -127,7 +150,7 @@ export const AppProvider = ({ children }) => {
     loadCuentasCatalogo,
     loadUserReports,
     saveNewCuentaToBackend,
-    resetLoadStates
+    refreshAllData
   ]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

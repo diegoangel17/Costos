@@ -30,52 +30,58 @@ export default function RegistrosForm() {
   const asientosList = getAsientosList();
   const movementsSummary = getMovementsByCuenta(registrosRows);
 
-
-const saveReport = async () => {
-  const data = exportData(reportData);
-  
-  if (!reportData.name) {
-    alert('Por favor ingresa un nombre para el reporte');
-    return;
-  }
-
-  try {
-    // CORRECCIÓN: La estructura de datos debe ser plana para el backend
-    const bodyData = {
-      userId: currentUser.userId,
-      name: reportData.name,
-      reportType: data.type,
-      programId: 3,
-      date: reportData.date,
-      data: data.rows,  // Enviar rows directamente como data
-      totals: {
-        ...data.totals,
-        asientos: data.asientos,
-        movementsSummary: data.movementsSummary
-      }  // Incluir asientos y movementsSummary dentro de totals
-    };
-
-    const response = await fetch(`${API_URL}/reports`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(bodyData)
-    });
-
-    const result = await response.json();
-
-    if (response.ok && result.success) {
-      alert('Reporte guardado exitosamente');
-      await loadUserReports(currentUser.userId);
-    } else {
-      alert(result.error || 'Error al guardar el reporte');
+  const saveReport = async () => {
+    const data = exportData(reportData);
+    
+    if (!reportData.name) {
+      alert('Por favor ingresa un nombre para el reporte');
+      return;
     }
-  } catch (error) {
-    console.error('Error al guardar reporte:', error);
-    alert('No se pudo conectar con el servidor para guardar el reporte');
-  }
-};
+
+    try {
+      // La estructura de datos debe ser plana para el backend
+      const bodyData = {
+        userId: currentUser.userId,
+        name: reportData.name,
+        reportType: data.type,
+        programId: 3,
+        date: reportData.date,
+        data: data.rows,
+        totals: {
+          ...data.totals,
+          asientos: data.asientos,
+          movementsSummary: data.movementsSummary
+        }
+      };
+
+      console.log('💾 Guardando reporte Registros Contables...');
+      const response = await fetch(`${API_URL}/reports`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(bodyData)
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        console.log('✅ Reporte guardado exitosamente');
+        
+        // ⭐ CORRECCIÓN: Forzar recarga
+        console.log('🔄 Recargando lista de reportes...');
+        await loadUserReports(currentUser.userId, true);
+        console.log('✅ Lista actualizada');
+        
+        alert('Reporte guardado exitosamente');
+      } else {
+        alert(result.error || 'Error al guardar el reporte');
+      }
+    } catch (error) {
+      console.error('Error al guardar reporte:', error);
+      alert('No se pudo conectar con el servidor para guardar el reporte');
+    }
+  };
 
   const handleExport = () => {
     const data = exportData(reportData);

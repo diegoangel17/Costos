@@ -40,6 +40,9 @@ export default function BalanceForm() {
         totals: data.totals
       };
 
+      console.log('💾 Guardando reporte Balance de Saldos...');
+      console.log('📦 Datos a enviar:', bodyData);
+
       const response = await fetch(`${API_URL}/reports`, {
         method: 'POST',
         headers: {
@@ -49,24 +52,26 @@ export default function BalanceForm() {
       });
 
       const result = await response.json();
+      console.log('📥 Respuesta del servidor:', result);
 
       if (response.ok && result.success) {
-      console.log('✅ Reporte guardado. Recargando lista...');
-      
-      // ⭐ AGREGAR ESTOS LOGS
-      console.log('🔍 Antes de loadUserReports, reports.length:', reports.length);
-      
-      await loadUserReports(currentUser.userId);
-      
-      console.log('🔍 Después de loadUserReports, reports.length:', reports.length);
-      console.log('🔍 Lista actualizada de reportes:', reports);
-      
-      alert('Reporte guardado exitosamente');
-    } else {
-      alert(result.error || 'Error al guardar el reporte');
-    }
+        console.log('✅ Reporte guardado exitosamente');
+        
+        // ⭐ CORRECCIÓN: Forzar recarga completa llamando directamente a loadUserReports
+        // Pasamos forceReload=true como segundo parámetro
+        console.log('🔄 Recargando lista de reportes...');
+        
+        await loadUserReports(currentUser.userId, true);
+        
+        console.log('✅ Lista de reportes actualizada');
+        
+        alert('Reporte guardado exitosamente');
+      } else {
+        console.error('❌ Error en la respuesta:', result.error);
+        alert(result.error || 'Error al guardar el reporte');
+      }
     } catch (error) {
-      console.error('Error al guardar reporte:', error);
+      console.error('❌ Error al guardar reporte:', error);
       alert('No se pudo conectar con el servidor para guardar el reporte');
     }
   };
