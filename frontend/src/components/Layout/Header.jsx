@@ -14,7 +14,7 @@ export default function Header({ title, showUser = true }) {
               <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
             </div>
             <h1 className="text-base sm:text-lg md:text-xl font-bold text-gray-900 truncate">
-              {title || 'Financial Reports Pro'}
+              {title || 'FinReport'}
             </h1>
           </div>
           {showUser && (
