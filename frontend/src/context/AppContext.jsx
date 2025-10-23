@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo, useRef } from 'react';
 import { CUENTAS_INICIALES } from '../constants';
 
 const AppContext = createContext();
@@ -25,11 +25,30 @@ export const AppProvider = ({ children }) => {
 
   const API_URL = 'http://localhost:5000/api';
 
-  // ⭐ CORRECCIÓN 1: Remover los flags que bloqueaban la recarga
-  // Ahora loadCuentasCatalogo se puede llamar múltiples veces sin problema
-  const loadCuentasCatalogo = useCallback(async () => {
+  // ⭐ SOLUCIÓN OPTIMIZADA: Usar refs para controlar cuándo cargar
+  // Esto evita infinite loops pero permite recargas cuando sea necesario
+  const isLoadingCuentas = useRef(false);
+  const isLoadingReports = useRef(false);
+  const lastReportsUserId = useRef(null);
+
+  // Cargar catálogo de cuentas - controlado con ref para evitar loops
+  const loadCuentasCatalogo = useCallback(async (force = false) => {
+    // Si ya está cargando, no hacer otra petición
+    if (isLoadingCuentas.current && !force) {
+      console.log('⏭️ Ya se está cargando el catálogo de cuentas, saltando...');
+      return;
+    }
+    
+    // Si no es forzado y ya tenemos datos, no recargar
+    if (!force && cuentasCatalogo.length > CUENTAS_INICIALES.length) {
+      console.log('⏭️ Catálogo de cuentas ya cargado, saltando...');
+      return;
+    }
+
     try {
+      isLoadingCuentas.current = true;
       console.log('🔄 Cargando catálogo de cuentas...');
+      
       const response = await fetch(`${API_URL}/cuentas`);
       const data = await response.json();
       
@@ -42,15 +61,29 @@ export const AppProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('❌ Error al cargar catálogo de cuentas:', error);
+    } finally {
+      isLoadingCuentas.current = false;
     }
-  }, [API_URL]);
+  }, [API_URL, cuentasCatalogo.length]);
 
-  // ⭐ CORRECCIÓN 2: loadUserReports ahora SIEMPRE recarga desde el servidor
-  // Removido el flag hasLoadedReports que causaba el problema
-  const loadUserReports = useCallback(async (userId, forceReload = false) => {
+  // Cargar reportes del usuario - controlado con ref para evitar loops
+  const loadUserReports = useCallback(async (userId, force = false) => {
+    if (!userId) {
+      console.warn('⚠️ No se puede cargar reportes sin userId');
+      return [];
+    }
+
+    // Si ya está cargando para este usuario, no hacer otra petición
+    if (isLoadingReports.current && lastReportsUserId.current === userId && !force) {
+      console.log('⏭️ Ya se están cargando los reportes para este usuario, saltando...');
+      return reports;
+    }
+
     try {
-      console.log('🔄 Cargando reportes del usuario:', userId);
-      console.log('🔄 Force reload:', forceReload);
+      isLoadingReports.current = true;
+      lastReportsUserId.current = userId;
+      
+      console.log('🔄 Cargando reportes del usuario:', userId, force ? '(forzado)' : '');
       
       const response = await fetch(`${API_URL}/reports?userId=${userId}`);
       const data = await response.json();
@@ -76,7 +109,6 @@ export const AppProvider = ({ children }) => {
         
         setReports(mappedReports);
         console.log('✅ Reportes cargados:', mappedReports.length);
-        console.log('📊 Lista completa de reportes:', mappedReports);
         
         return mappedReports;
       } else {
@@ -88,6 +120,8 @@ export const AppProvider = ({ children }) => {
       console.error('❌ Error al cargar reportes:', error);
       setReports([]);
       return [];
+    } finally {
+      isLoadingReports.current = false;
     }
   }, [API_URL]);
 
@@ -108,20 +142,36 @@ export const AppProvider = ({ children }) => {
       
       if (response.ok) {
         console.log('✅ Nueva cuenta guardada:', cuenta);
-        // Recargar catálogo después de guardar
-        await loadCuentasCatalogo();
+        // Recargar catálogo después de guardar (forzado)
+        await loadCuentasCatalogo(true);
       }
     } catch (error) {
       console.error('❌ Error al guardar cuenta en el backend:', error);
     }
   }, [API_URL, loadCuentasCatalogo]);
 
-  // ⭐ CORRECCIÓN 3: Nueva función para forzar recarga completa
+  // Función para forzar recarga completa (usar después de guardar reportes)
   const refreshAllData = useCallback(async (userId) => {
     console.log('🔄 Refrescando todos los datos...');
-    await loadCuentasCatalogo();
+    await loadCuentasCatalogo(true);
     await loadUserReports(userId, true);
     console.log('✅ Datos refrescados completamente');
+  }, [loadCuentasCatalogo, loadUserReports]);
+
+  // Función para inicializar datos (llamar solo al inicio de sesión)
+  const initializeData = useCallback(async (userId) => {
+    console.log('🚀 Inicializando datos para usuario:', userId);
+    
+    // Resetear refs
+    isLoadingCuentas.current = false;
+    isLoadingReports.current = false;
+    lastReportsUserId.current = null;
+    
+    // Cargar datos iniciales
+    await loadCuentasCatalogo(false);
+    await loadUserReports(userId, false);
+    
+    console.log('✅ Datos inicializados');
   }, [loadCuentasCatalogo, loadUserReports]);
 
   // Memoizar el valor del contexto
@@ -140,7 +190,8 @@ export const AppProvider = ({ children }) => {
     loadCuentasCatalogo,
     loadUserReports,
     saveNewCuentaToBackend,
-    refreshAllData // ⭐ Nueva función exportada
+    refreshAllData,
+    initializeData // ⭐ Nueva función para inicializar
   }), [
     currentView,
     selectedProgram,
@@ -150,7 +201,8 @@ export const AppProvider = ({ children }) => {
     loadCuentasCatalogo,
     loadUserReports,
     saveNewCuentaToBackend,
-    refreshAllData
+    refreshAllData,
+    initializeData
   ]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useBalance } from '../../hooks/useBalance';
 
 export default function BalanceForm() {
-  const { setSelectedProgram, reportData, API_URL, loadUserReports } = useApp();
+  const { setSelectedProgram, reportData, API_URL, refreshAllData } = useApp();
   const { currentUser } = useAuth();
   const {
     balanceRows,
@@ -41,7 +41,6 @@ export default function BalanceForm() {
       };
 
       console.log('💾 Guardando reporte Balance de Saldos...');
-      console.log('📦 Datos a enviar:', bodyData);
 
       const response = await fetch(`${API_URL}/reports`, {
         method: 'POST',
@@ -52,18 +51,12 @@ export default function BalanceForm() {
       });
 
       const result = await response.json();
-      console.log('📥 Respuesta del servidor:', result);
 
       if (response.ok && result.success) {
         console.log('✅ Reporte guardado exitosamente');
         
-        // ⭐ CORRECCIÓN: Forzar recarga completa llamando directamente a loadUserReports
-        // Pasamos forceReload=true como segundo parámetro
-        console.log('🔄 Recargando lista de reportes...');
-        
-        await loadUserReports(currentUser.userId, true);
-        
-        console.log('✅ Lista de reportes actualizada');
+        // ⭐ OPTIMIZACIÓN: Usar refreshAllData que es más eficiente
+        await refreshAllData(currentUser.userId);
         
         alert('Reporte guardado exitosamente');
       } else {

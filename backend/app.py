@@ -195,7 +195,7 @@ def create_report():
         if not user:
             return jsonify({'error': 'Usuario no encontrado'}), 404
         
-        # ⭐ Log para debugging
+        #  Log para debugging
         print(f"Guardando reporte tipo {data.get('programId')}")
         print(f"Estructura de data: {type(data['data'])}")
         
