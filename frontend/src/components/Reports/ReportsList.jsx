@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Search, Filter, Grid3x3, List, ChevronDown, Plus, FileText, Calculator, Package, DollarSign, BarChart3 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useReports } from '../../hooks/useReports';
 import { formatDate } from '../../utils/formatters';
 import Header from '../Layout/Header';
+import ReportViewer from './ReportViewer';
 
 export default function ReportsList() {
   const { setCurrentView } = useApp();
@@ -18,6 +19,18 @@ export default function ReportsList() {
     setSortBy,
     filteredReports
   } = useReports();
+  
+  const [selectedReportId, setSelectedReportId] = useState(null);
+
+  // Si hay un reporte seleccionado, mostrar el visor
+  if (selectedReportId) {
+    return (
+      <ReportViewer 
+        reportId={selectedReportId} 
+        onBack={() => setSelectedReportId(null)} 
+      />
+    );
+  }
 
   const getIconComponent = (iconType) => {
     const iconMap = {
@@ -115,7 +128,7 @@ export default function ReportsList() {
             {filteredReports.map(report => (
               <button
                 key={report.id}
-                onClick={() => alert(`Abriendo: ${report.name}`)}
+                onClick={() => setSelectedReportId(report.id)}
                 className="group bg-white rounded-lg border border-gray-200 hover:border-blue-500 hover:shadow-lg transition-all overflow-hidden text-left"
               >
                 <div className={`${report.color} h-24 sm:h-28 md:h-32 flex items-center justify-center group-hover:scale-105 transition-transform`}>
@@ -142,7 +155,7 @@ export default function ReportsList() {
               {filteredReports.map(report => (
                 <button
                   key={report.id}
-                  onClick={() => alert(`Abriendo: ${report.name}`)}
+                  onClick={() => setSelectedReportId(report.id)}
                   className="w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 hover:bg-gray-50 transition-colors text-left"
                 >
                   <div className={`${report.color} w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center flex-shrink-0`}>

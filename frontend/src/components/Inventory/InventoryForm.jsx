@@ -48,7 +48,7 @@ export default function InventoryForm() {
         totals: data.totals
       };
 
-      console.log('💾 Guardando reporte Inventario...');
+      console.log(' Guardando reporte Inventario...');
       const response = await fetch(`${API_URL}/reports`, {
         method: 'POST',
         headers: {
@@ -60,12 +60,12 @@ export default function InventoryForm() {
       const result = await response.json();
 
       if (response.ok && result.success) {
-        console.log('✅ Reporte guardado exitosamente');
+        console.log(' Reporte guardado exitosamente');
         
         // ⭐ CORRECCIÓN: Forzar recarga
-        console.log('🔄 Recargando lista de reportes...');
+        console.log(' Recargando lista de reportes...');
         await loadUserReports(currentUser.userId, true);
-        console.log('✅ Lista actualizada');
+        console.log(' Lista actualizada');
         
         alert('Reporte guardado exitosamente');
       } else {

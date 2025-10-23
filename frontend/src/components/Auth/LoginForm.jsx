@@ -79,7 +79,7 @@ export default function LoginForm() {
             <TrendingUp className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 text-white" />
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
-            Financial Reports Pro
+            Bienvenido a FinReport
           </h1>
           <p className="text-sm sm:text-base text-gray-600 px-4">
             Sistema automatizado de reportes financieros
