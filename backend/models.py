@@ -11,8 +11,15 @@ class User(db.Model):
     user_id = db.Column(db.String(50), unique=True, nullable=False)
     name = db.Column(db.String(100), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash = db.Column(db.String(255), nullable=False)
+    password_hash = db.Column(db.String(255), nullable=True)  # Nullable para OAuth
+    
+    # Campos para OAuth
+    google_id = db.Column(db.String(255), unique=True, nullable=True)
+    picture = db.Column(db.String(500), nullable=True)
+    auth_provider = db.Column(db.String(50), default='local')  # 'local' o 'google'
+    
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_login = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     reports = db.relationship('Report', backref='user', lazy=True, cascade='all, delete-orphan')
     
@@ -22,7 +29,10 @@ class User(db.Model):
             'userId': self.user_id,
             'name': self.name,
             'email': self.email,
-            'created_at': self.created_at.isoformat()
+            'picture': self.picture,
+            'auth_provider': self.auth_provider,
+            'created_at': self.created_at.isoformat(),
+            'last_login': self.last_login.isoformat() if self.last_login else None
         }
 
 class Report(db.Model):
@@ -67,4 +77,3 @@ class CuentaContable(db.Model):
             'clasificacion': self.clasificacion,
             'descripcion': self.descripcion
         }
-

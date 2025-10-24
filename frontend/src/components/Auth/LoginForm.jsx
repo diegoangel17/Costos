@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { TrendingUp, Eye, EyeOff, Lock, User, Mail, AlertCircle, CheckCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { validateLoginForm, validateRegisterForm, validatePassword } from '../../utils/validators';
+import GoogleLoginButton from './GoogleLoginButton';
 
 export default function LoginForm() {
   const { login, register, isLoading } = useAuth();
@@ -21,6 +22,31 @@ export default function LoginForm() {
   });
   
   const [errors, setErrors] = useState({});
+
+  // Verificar si hay un token en la URL (redirect de OAuth)
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+    const userId = urlParams.get('user');
+    const error = urlParams.get('error');
+
+    if (error) {
+      alert(`Error de autenticación: ${error}`);
+      window.history.replaceState({}, document.title, window.location.pathname);
+      return;
+    }
+
+    if (token && userId) {
+      // Guardar el token
+      localStorage.setItem('auth_token', token);
+      
+      // Procesar el login exitoso
+      handleOAuthSuccess({ token, user: { userId } });
+      
+      // Limpiar la URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
 
   const passwordRequirements = validatePassword(formData.password);
 
@@ -45,12 +71,30 @@ export default function LoginForm() {
       : await register(formData);
     
     if (result.success) {
+      // Guardar el token si viene en la respuesta
+      if (result.token) {
+        localStorage.setItem('auth_token', result.token);
+      }
+      
       setCurrentView('menu');
       loadCuentasCatalogo();
       loadUserReports(result.user.userId);
     } else {
       alert(result.error || 'Error en la autenticación');
     }
+  };
+
+  const handleOAuthSuccess = (data) => {
+    if (data.success && data.token && data.user) {
+      localStorage.setItem('auth_token', data.token);
+      setCurrentView('menu');
+      loadCuentasCatalogo();
+      loadUserReports(data.user.userId);
+    }
+  };
+
+  const handleOAuthError = (error) => {
+    alert(error || 'Error al autenticar con Google');
   };
 
   const handleKeyPress = (e) => {
@@ -104,6 +148,23 @@ export default function LoginForm() {
             >
               Crear Cuenta
             </button>
+          </div>
+
+          {/* Botón de Google OAuth */}
+          <div className="mb-6">
+            <GoogleLoginButton 
+              onSuccess={handleOAuthSuccess}
+              onError={handleOAuthError}
+            />
+            
+            <div className="relative my-6">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-300"></div>
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-4 bg-white text-gray-500">O continúa con</span>
+              </div>
+            </div>
           </div>
 
           <div className="space-y-3 sm:space-y-4">

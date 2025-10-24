@@ -1,19 +1,45 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, redirect, url_for
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 from models import db, User, Report, CuentaContable
 from datetime import datetime
+from oauthlib.oauth2 import WebApplicationClient
 import json
 import os
+import requests
+
+# Importar configuración y utilidades de autenticación
+from config import config
+from auth_utils import (
+    create_jwt_token,
+    verify_jwt_token,
+    verify_google_token,
+    get_google_provider_cfg,
+    token_required,
+    generate_user_id
+)
 
 app = Flask(__name__)
-CORS(app)
 
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///financial_reports.db'
+# Configuración CORS
+CORS(app, resources={
+    r"/api/*": {
+        "origins": config.ALLOWED_ORIGINS,
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"],
+        "supports_credentials": True
+    }
+})
+
+# Configuración de la app
+app.config['SQLALCHEMY_DATABASE_URI'] = config.SQLALCHEMY_DATABASE_URI
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = 'dev-secret-key-change-in-production'
+app.config['SECRET_KEY'] = config.SECRET_KEY
 
 db.init_app(app)
+
+# Cliente OAuth
+oauth_client = WebApplicationClient(config.GOOGLE_CLIENT_ID)
 
 with app.app_context():
     db.create_all()
@@ -44,6 +70,170 @@ with app.app_context():
         db.session.commit()
         print("✓ Cuentas contables inicializadas")
 
+# ==================== RUTAS DE AUTENTICACIÓN OAUTH ====================
+
+@app.route('/api/auth/google/login', methods=['GET'])
+def google_login():
+    """
+    Iniciar el flujo de autenticación con Google
+    """
+    try:
+        google_provider_cfg = get_google_provider_cfg()
+        authorization_endpoint = google_provider_cfg["authorization_endpoint"]
+        
+        request_uri = oauth_client.prepare_request_uri(
+            authorization_endpoint,
+            redirect_uri=config.GOOGLE_REDIRECT_URI,
+            scope=["openid", "email", "profile"],
+        )
+        
+        return jsonify({
+            'success': True,
+            'authorization_url': request_uri
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ Error en google_login: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/auth/google/callback', methods=['GET'])
+def google_callback():
+    """
+    Callback de Google OAuth
+    """
+    try:
+        code = request.args.get("code")
+        
+        if not code:
+            return redirect(f"{config.FRONTEND_URL}?error=no_code")
+        
+        google_provider_cfg = get_google_provider_cfg()
+        token_endpoint = google_provider_cfg["token_endpoint"]
+        
+        token_url, headers, body = oauth_client.prepare_token_request(
+            token_endpoint,
+            authorization_response=request.url,
+            redirect_url=config.GOOGLE_REDIRECT_URI,
+            code=code
+        )
+        
+        token_response = requests.post(
+            token_url,
+            headers=headers,
+            data=body,
+            auth=(config.GOOGLE_CLIENT_ID, config.GOOGLE_CLIENT_SECRET),
+        )
+        
+        oauth_client.parse_request_body_response(json.dumps(token_response.json()))
+        
+        userinfo_endpoint = google_provider_cfg["userinfo_endpoint"]
+        uri, headers, body = oauth_client.add_token(userinfo_endpoint)
+        userinfo_response = requests.get(uri, headers=headers, data=body)
+        
+        userinfo = userinfo_response.json()
+        
+        if not userinfo.get("email_verified"):
+            return redirect(f"{config.FRONTEND_URL}?error=email_not_verified")
+        
+        email = userinfo["email"]
+        name = userinfo.get("name", email.split('@')[0])
+        picture = userinfo.get("picture", "")
+        google_id = userinfo["sub"]
+        
+        user = User.query.filter_by(email=email).first()
+        
+        if not user:
+            user_id = generate_user_id(email)
+            user = User(
+                user_id=user_id,
+                name=name,
+                email=email,
+                password_hash="",  # No se usa contraseña con OAuth
+                google_id=google_id,
+                picture=picture,
+                auth_provider='google'
+            )
+            db.session.add(user)
+            db.session.commit()
+        else:
+            if not user.google_id:
+                user.google_id = google_id
+                user.auth_provider = 'google'
+            if not user.picture:
+                user.picture = picture
+            db.session.commit()
+        
+        jwt_token = create_jwt_token(user.to_dict())
+        
+        redirect_url = f"{config.FRONTEND_URL}?token={jwt_token}&user={user.user_id}"
+        return redirect(redirect_url)
+        
+    except Exception as e:
+        print(f"❌ Error en google_callback: {str(e)}")
+        return redirect(f"{config.FRONTEND_URL}?error={str(e)}")
+
+@app.route('/api/auth/google/verify', methods=['POST'])
+def verify_google_token_route():
+    """
+    Verificar un token de Google y crear sesión
+    """
+    try:
+        data = request.get_json()
+        token = data.get('token')
+        
+        if not token:
+            return jsonify({'error': 'Token no proporcionado'}), 400
+        
+        google_info = verify_google_token(token)
+        
+        if not google_info:
+            return jsonify({'error': 'Token inválido'}), 401
+        
+        if not google_info['email_verified']:
+            return jsonify({'error': 'Email no verificado'}), 401
+        
+        email = google_info['email']
+        name = google_info['name'] or email.split('@')[0]
+        picture = google_info.get('picture', '')
+        google_id = google_info['sub']
+        
+        user = User.query.filter_by(email=email).first()
+        
+        if not user:
+            user_id = generate_user_id(email)
+            user = User(
+                user_id=user_id,
+                name=name,
+                email=email,
+                password_hash="",
+                google_id=google_id,
+                picture=picture,
+                auth_provider='google'
+            )
+            db.session.add(user)
+            db.session.commit()
+        else:
+            if not user.google_id:
+                user.google_id = google_id
+                user.auth_provider = 'google'
+            if not user.picture:
+                user.picture = picture
+            db.session.commit()
+        
+        jwt_token = create_jwt_token(user.to_dict())
+        
+        return jsonify({
+            'success': True,
+            'token': jwt_token,
+            'user': user.to_dict()
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ Error en verify_google_token: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+# ==================== RUTAS DE AUTENTICACIÓN TRADICIONAL ====================
+
 @app.route('/api/register', methods=['POST'])
 def register():
     try:
@@ -62,15 +252,19 @@ def register():
             user_id=data['userId'],
             name=data['name'],
             email=data['email'],
-            password_hash=generate_password_hash(data['password'])
+            password_hash=generate_password_hash(data['password']),
+            auth_provider='local'
         )
         
         db.session.add(new_user)
         db.session.commit()
         
+        jwt_token = create_jwt_token(new_user.to_dict())
+        
         return jsonify({
             'success': True,
             'message': 'Usuario registrado exitosamente',
+            'token': jwt_token,
             'user': new_user.to_dict()
         }), 201
         
@@ -91,14 +285,30 @@ def login():
         if not user or not check_password_hash(user.password_hash, data['password']):
             return jsonify({'error': 'Credenciales inválidas'}), 401
         
+        jwt_token = create_jwt_token(user.to_dict())
+        
         return jsonify({
             'success': True,
             'message': 'Login exitoso',
+            'token': jwt_token,
             'user': user.to_dict()
         }), 200
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/auth/verify', methods=['GET'])
+@token_required
+def verify_token(current_user):
+    """
+    Verificar si el token es válido
+    """
+    return jsonify({
+        'success': True,
+        'user': current_user
+    }), 200
+
+# ==================== RUTAS DE CUENTAS ====================
 
 @app.route('/api/cuentas', methods=['GET'])
 def get_cuentas():
@@ -137,13 +347,13 @@ def create_cuenta():
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
+# ==================== RUTAS DE REPORTES ====================
+
 @app.route('/api/reports', methods=['GET'])
-def get_reports():
+@token_required
+def get_reports(current_user):
     try:
-        user_id = request.args.get('userId')
-        
-        if not user_id:
-            return jsonify({'error': 'userId es requerido'}), 400
+        user_id = current_user['user_id']
         
         user = User.query.filter_by(user_id=user_id).first()
         if not user:
@@ -159,10 +369,9 @@ def get_reports():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-
 @app.route('/api/reports/<int:report_id>', methods=['GET'])
-def get_report_by_id(report_id):
-    """Obtener un reporte específico por ID"""
+@token_required
+def get_report_by_id(current_user, report_id):
     try:
         report = Report.query.get(report_id)
         
@@ -184,20 +393,19 @@ def get_report_by_id(report_id):
         }), 500
 
 @app.route('/api/reports', methods=['POST'])
-def create_report():
+@token_required
+def create_report(current_user):
     try:
         data = request.get_json()
         
-        if not all(k in data for k in ['userId', 'name', 'reportType', 'date', 'data']):
+        if not all(k in data for k in ['name', 'reportType', 'date', 'data']):
             return jsonify({'error': 'Faltan campos requeridos'}), 400
         
-        user = User.query.filter_by(user_id=data['userId']).first()
+        user_id = current_user['user_id']
+        user = User.query.filter_by(user_id=user_id).first()
+        
         if not user:
             return jsonify({'error': 'Usuario no encontrado'}), 404
-        
-        #  Log para debugging
-        print(f"Guardando reporte tipo {data.get('programId')}")
-        print(f"Estructura de data: {type(data['data'])}")
         
         new_report = Report(
             user_id=user.id,
@@ -230,8 +438,6 @@ def health_check():
         'database': 'connected',
         'timestamp': datetime.utcnow().isoformat()
     }), 200
-
-
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
